@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="radius_small">8dp</dimen>
+
+    <dimen name="space_small">8dp</dimen>
+    <dimen name="space_medium">24dp</dimen>
+    <dimen name="space_large">48dp</dimen>
+
+    <dimen name="panel_count_size">150dp</dimen>
+</resources>
