@@ -1,17 +1,9 @@
 package com.navaplus.gfit;
 
-import android.Manifest;
-import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
-import android.provider.Settings;
-import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
-import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.view.View;
 import android.widget.TextView;
 
 import com.google.android.gms.common.ConnectionResult;
@@ -62,7 +54,6 @@ public class MainActivity extends AppCompatActivity {
     };
 
     private GoogleApiClient googleApiClient = null;
-    private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
     private OnDataPointListener dataPointListener;
 
     @Override
@@ -72,10 +63,6 @@ public class MainActivity extends AppCompatActivity {
 
         textViewCount = (TextView) findViewById(R.id.text_view_count);
         textViewPoint = (TextView) findViewById(R.id.text_view_point);
-
-//        if (!checkPermissions()) {
-//            requestPermissions();
-//        }
     }
 
     @Override
@@ -93,7 +80,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void buildFitnessClient() {
-        if (googleApiClient == null && checkPermissions()) {
+        if (googleApiClient == null) {
             googleApiClient = new GoogleApiClient.Builder(this)
                     .addApi(Fitness.SENSORS_API)
                     .addScope(new Scope(Scopes.FITNESS_ACTIVITY_READ_WRITE))
@@ -103,7 +90,6 @@ public class MainActivity extends AppCompatActivity {
                                 public void onConnected(Bundle bundle) {
                                     Log.i(TAG, "Connected!!!");
                                     findFitnessDataSources();
-                                    runOnUiThread(updateViewThread);
                                 }
 
                                 @Override
@@ -132,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void findFitnessDataSources() {
         Fitness.SensorsApi.findDataSources(googleApiClient, new DataSourcesRequest.Builder()
-                .setDataTypes(DataType.TYPE_STEP_COUNT_DELTA)
+                .setDataTypes(DataType.TYPE_STEP_COUNT_CUMULATIVE)
                 .setDataSourceTypes(DataSource.TYPE_DERIVED)
                 .build())
                 .setResultCallback(new ResultCallback<DataSourcesResult>() {
@@ -143,9 +129,9 @@ public class MainActivity extends AppCompatActivity {
                             Log.i(TAG, "Data source found: " + dataSource.toString());
                             Log.i(TAG, "Data Source type: " + dataSource.getDataType().getName());
 
-                            if (dataSource.getDataType().equals(DataType.TYPE_STEP_COUNT_DELTA) && dataPointListener == null) {
-                                Log.i(TAG, "Data source for LOCATION_SAMPLE found!  Registering.");
-                                registerFitnessDataListener(dataSource, DataType.TYPE_STEP_COUNT_DELTA);
+                            if (dataSource.getDataType().equals(DataType.TYPE_STEP_COUNT_CUMULATIVE) && dataPointListener == null) {
+                                Log.i(TAG, "Data source for TYPE_STEP_COUNT_DELTA found!  Registering.");
+                                registerFitnessDataListener(dataSource, DataType.TYPE_STEP_COUNT_CUMULATIVE);
                             }
                         }
                     }
@@ -162,6 +148,8 @@ public class MainActivity extends AppCompatActivity {
                     Log.i(TAG, "Detected DataPoint value: " + val);
 
                     lastStepValue = val.asInt();
+
+                    runOnUiThread(updateViewThread);
                 }
             }
         };
@@ -171,7 +159,7 @@ public class MainActivity extends AppCompatActivity {
                 new SensorRequest.Builder()
                         .setDataSource(dataSource)
                         .setDataType(dataType)
-                        .setSamplingRate(10, TimeUnit.SECONDS)
+                        .setSamplingRate(3, TimeUnit.SECONDS)
                         .build(),
                 dataPointListener)
                 .setResultCallback(new ResultCallback<Status>() {
@@ -191,6 +179,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (!googleApiClient.isConnected()) {
+            return;
+        }
+
         Fitness.SensorsApi.remove(
                 googleApiClient,
                 dataPointListener)
@@ -204,66 +196,5 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 });
-    }
-
-    private boolean checkPermissions() {
-        int permissionState = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION);
-        return permissionState == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private void requestPermissions() {
-        boolean shouldProvideRationale = ActivityCompat
-                .shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION);
-
-        if (shouldProvideRationale) {
-            Log.i(TAG, "Displaying permission rationale to provide additional context.");
-            Snackbar.make(
-                    findViewById(R.id.main_activity_view),
-                    R.string.snackbar_message_rationale,
-                    Snackbar.LENGTH_INDEFINITE)
-                    .setAction(R.string.snackbar_button_ok, new View.OnClickListener() {
-                        @Override
-                        public void onClick(View view) {
-                            ActivityCompat.requestPermissions(MainActivity.this,
-                                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                                    REQUEST_PERMISSIONS_REQUEST_CODE);
-                        }
-                    })
-                    .show();
-        } else {
-            Log.i(TAG, "Requesting permission");
-            ActivityCompat.requestPermissions(MainActivity.this,
-                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                    REQUEST_PERMISSIONS_REQUEST_CODE);
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        Log.i(TAG, "onRequestPermissionResult");
-        if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE) {
-            if (grantResults.length <= 0) {
-                Log.i(TAG, "User interaction was cancelled.");
-            } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                buildFitnessClient();
-            } else {
-                Snackbar.make(
-                        findViewById(R.id.main_activity_view),
-                        R.string.snackbar_message_denied_explanation,
-                        Snackbar.LENGTH_INDEFINITE)
-                        .setAction(R.string.snackbar_button_settings, new View.OnClickListener() {
-                            @Override
-                            public void onClick(View view) {
-                                Intent intent = new Intent();
-                                intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                                Uri uri = Uri.fromParts("package", BuildConfig.APPLICATION_ID, null);
-                                intent.setData(uri);
-                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                startActivity(intent);
-                            }
-                        })
-                        .show();
-            }
-        }
     }
 }
