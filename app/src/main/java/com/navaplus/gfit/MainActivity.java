@@ -203,10 +203,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void subscribeRecordAPI() {
-        if (!googleApiClient.isConnected()) {
-            return;
-        }
-
         Fitness.RecordingApi.subscribe(googleApiClient, DataType.TYPE_STEP_COUNT_DELTA)
                 .setResultCallback(new ResultCallback<Status>() {
                     @Override
