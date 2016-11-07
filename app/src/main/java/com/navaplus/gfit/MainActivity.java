@@ -14,6 +14,7 @@ import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.common.api.Status;
 import com.google.android.gms.fitness.Fitness;
+import com.google.android.gms.fitness.FitnessStatusCodes;
 import com.google.android.gms.fitness.data.DataPoint;
 import com.google.android.gms.fitness.data.DataSource;
 import com.google.android.gms.fitness.data.DataType;
@@ -70,12 +71,14 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
 
         buildFitnessClient();
+        subscribeRecordAPI();
     }
 
     @Override
     protected void onStop() {
         super.onStop();
 
+        unsubscribeRecordAPI();
         unregisterFitnessDataListener();
     }
 
@@ -83,7 +86,8 @@ public class MainActivity extends AppCompatActivity {
         if (googleApiClient == null) {
             googleApiClient = new GoogleApiClient.Builder(this)
                     .addApi(Fitness.SENSORS_API)
-                    .addScope(new Scope(Scopes.FITNESS_ACTIVITY_READ_WRITE))
+                    .addApi(Fitness.RECORDING_API)
+                    .addScope(new Scope(Scopes.FITNESS_ACTIVITY_READ))
                     .addConnectionCallbacks(
                             new GoogleApiClient.ConnectionCallbacks() {
                                 @Override
@@ -130,7 +134,7 @@ public class MainActivity extends AppCompatActivity {
                             Log.i(TAG, "Data Source type: " + dataSource.getDataType().getName());
 
                             if (dataSource.getDataType().equals(DataType.TYPE_STEP_COUNT_CUMULATIVE) && dataPointListener == null) {
-                                Log.i(TAG, "Data source for TYPE_STEP_COUNT_DELTA found!  Registering.");
+                                Log.i(TAG, "Data source for TYPE_STEP_COUNT_CUMULATIVE found!  Registering.");
                                 registerFitnessDataListener(dataSource, DataType.TYPE_STEP_COUNT_CUMULATIVE);
                             }
                         }
@@ -193,6 +197,42 @@ public class MainActivity extends AppCompatActivity {
                             Log.i(TAG, "Listener was removed!");
                         } else {
                             Log.i(TAG, "Listener was not removed.");
+                        }
+                    }
+                });
+    }
+
+    private void subscribeRecordAPI() {
+        Fitness.RecordingApi.subscribe(googleApiClient, DataType.TYPE_STEP_COUNT_DELTA)
+                .setResultCallback(new ResultCallback<Status>() {
+                    @Override
+                    public void onResult(Status status) {
+                        if (status.isSuccess()) {
+                            if (status.getStatusCode() == FitnessStatusCodes.SUCCESS_ALREADY_SUBSCRIBED) {
+                                Log.i(TAG, "Existing subscription for activity detected.");
+                            } else {
+                                Log.i(TAG, "Successfully subscribed!");
+                            }
+                        } else {
+                            Log.i(TAG, "There was a problem subscribing.");
+                        }
+                    }
+                });
+    }
+
+    private void unsubscribeRecordAPI() {
+        if (!googleApiClient.isConnected()) {
+            return;
+        }
+
+        Fitness.RecordingApi.unsubscribe(googleApiClient, DataType.TYPE_STEP_COUNT_CUMULATIVE)
+                .setResultCallback(new ResultCallback<Status>() {
+                    @Override
+                    public void onResult(Status status) {
+                        if (status.isSuccess()) {
+                            Log.i(TAG, "Successfully unsubscribed for data type TYPE_STEP_COUNT_CUMULATIVE");
+                        } else {
+                            Log.i(TAG, "Failed to unsubscribe for data type TYPE_STEP_COUNT_CUMULATIVE");
                         }
                     }
                 });
